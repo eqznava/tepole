@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radiation Unit Tests Runner</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
+        #results { margin-top: 20px; white-space: pre-wrap; background: white; padding: 10px; border: 1px solid #ccc; }
+        button { padding: 10px 20px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Radiation Exposure Unit Tests</h1>
+    <button onclick="runTests()">Run Tests</button>
+    <div id="results"></div>
+
+    <script>
+        // Embedded core functions and classes from radiation_calculator.html
+        const CUBE_NOMINAL_N = 2.5;
+        const CYLINDER_NOMINAL_N = 2.0;
+        const DEFAULT_B = 1.05;
+
+        function calculate_n(X_30, X_contact, B, r_s) {
+            if (X_contact <= 0 || r_s <= 0) {
+                throw new Error('X_contact and r_s must be positive');
+            }
+            const exposure_ratio = X_30 / (X_contact * B);
+            if (exposure_ratio <= 0) {
+                throw new Error('Exposure ratio must be positive');
+            }
+            const distance_ratio = r_s / (r_s + 0.30);
+            return Math.log(exposure_ratio) / Math.log(distance_ratio);
+        }
+
+        function estimate_exposure(delta, X_contact, n, B, r_s) {
+            if (X_contact <= 0 || r_s <= 0) {
+                throw new Error('X_contact and r_s must be positive');
+            }
+            if (delta < 0) {
+                throw new Error('Delta must be non-negative');
+            }
+            if (delta === 0) {
+                return X_contact;
+            }
+            if (r_s + delta === 0) {
+                throw new Error('Total distance cannot be zero');
+            }
+            const factor = Math.pow(r_s / (r_s + delta), n);
+            return X_contact * factor * B;
+        }
+
+        class CubeSource {
+            constructor(side, X_contact) {
+                if (side <= 0 || X_contact <= 0) {
+                    throw new Error('Side and X_contact must be positive');
+                }
+                this.side = side;
+                this.X_contact = X_contact;
+                this.r_s = side / 2;
+                this.n = null;
+                this.B = DEFAULT_B;
+            }
+
+            estimate_n(X_30 = null, B = null) {
+                if (B !== null) {
+                    this.B = B;
+                }
+                if (X_30 !== null) {
+                    if (X_30 <= 0) {
+                        throw new Error('X_30 must be positive');
+                    }
+                    this.n = calculate_n(X_30, this.X_contact, this.B, this.r_s);
+                } else {
+                    this.n = CUBE_NOMINAL_N;
+                }
+                return this.n;
+            }
+
+            exposure_at(delta) {
+                if (this.n === null) {
+                    this.estimate_n();
+                }
+                return estimate_exposure(delta, this.X_contact, this.n, this.B, this.r_s);
+            }
+        }
+
+        class CylinderSource {
+            constructor(diameter, height, orientation, X_contact) {
+                if (diameter <= 0 || height <= 0 || X_contact <= 0) {
+                    throw new Error('Diameter, height, and X_contact must be positive');
+                }
+                if (!['side', 'top'].includes(orientation)) {
+                    throw new Error('Orientation must be "side" or "top"');
+                }
+                this.diameter = diameter;
+                this.height = height;
+                this.orientation = orientation;
+                this.X_contact = X_contact;
+                this.r_s = orientation === 'side' ? diameter / 2 : height / 2;
+                this.n = null;
+                this.B = DEFAULT_B;
+            }
+
+            estimate_n(X_30 = null, B = null) {
+                if (B !== null) {
+                    this.B = B;
+                }
+                if (X_30 !== null) {
+                    if (X_30 <= 0) {
+                        throw new Error('X_30 must be positive');
+                    }
+                    this.n = calculate_n(X_30, this.X_contact, this.B, this.r_s);
+                } else {
+                    this.n = CYLINDER_NOMINAL_N;
+                }
+                return this.n;
+            }
+
+            exposure_at(delta) {
+                if (this.n === null) {
+                    this.estimate_n();
+                }
+                return estimate_exposure(delta, this.X_contact, this.n, this.B, this.r_s);
+            }
+        }
+
+        // Test framework and tests from radiation_tests.js
+        function assertEqual(actual, expected, message, tolerance = 0.01) {
+            const pass = Math.abs(actual - expected) <= tolerance;
+            const result = `${pass ? 'PASS' : 'FAIL'}: ${message} (expected ${expected}, got ${actual})`;
+            document.getElementById('results').innerHTML += result + '<br>';
+            console.log(result);
+            if (!pass) throw new Error(message);
+        }
+
+        function assertThrows(fn, message) {
+            try {
+                fn();
+                const result = `FAIL: ${message} (did not throw)`;
+                document.getElementById('results').innerHTML += result + '<br>';
+                console.log(result);
+                throw new Error(message);
+            } catch (e) {
+                const result = `PASS: ${message} (threw: ${e.message})`;
+                document.getElementById('results').innerHTML += result + '<br>';
+                console.log(result);
+            }
+        }
+
+        // Sample data
+        const SAMPLE_RS = 0.05;
+        const SAMPLE_X_CONTACT = 100;
+        const SAMPLE_X_30 = 20;
+        const SAMPLE_B = 1.05;
+
+        const expected_n = Math.log(SAMPLE_X_30 / (SAMPLE_X_CONTACT * SAMPLE_B)) / Math.log(SAMPLE_RS / (SAMPLE_RS + 0.30));
+
+        function runTests() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            console.log('Running Radiation Exposure Unit Tests...\n');
+
+            // Test calculate_n
+            resultsDiv.innerHTML += '<h3>Testing calculate_n:</h3>';
+            assertEqual(calculate_n(SAMPLE_X_30, SAMPLE_X_CONTACT, SAMPLE_B, SAMPLE_RS), expected_n, 'calculate_n valid input', 0.001);
+
+            assertThrows(() => calculate_n(0, SAMPLE_X_CONTACT, SAMPLE_B, SAMPLE_RS), 'calculate_n X_30 <=0');
+            assertThrows(() => calculate_n(SAMPLE_X_30, 0, SAMPLE_B, SAMPLE_RS), 'calculate_n X_contact <=0');
+            assertThrows(() => calculate_n(SAMPLE_X_30, SAMPLE_X_CONTACT, SAMPLE_B, 0), 'calculate_n r_s <=0');
+
+            // Test estimate_exposure
+            resultsDiv.innerHTML += '<h3>Testing estimate_exposure:</h3>';
+            assertEqual(estimate_exposure(0, SAMPLE_X_CONTACT, 2.5, SAMPLE_B, SAMPLE_RS), SAMPLE_X_CONTACT, 'estimate_exposure delta=0');
+
+            const factor_03 = Math.pow(SAMPLE_RS / (SAMPLE_RS + 0.3), 2.5);
+            const expected_03 = SAMPLE_X_CONTACT * factor_03 * SAMPLE_B;
+            assertEqual(estimate_exposure(0.3, SAMPLE_X_CONTACT, 2.5, SAMPLE_B, SAMPLE_RS), expected_03, 'estimate_exposure delta=0.3', 0.01);
+
+            assertThrows(() => estimate_exposure(0.3, 0, 2.5, SAMPLE_B, SAMPLE_RS), 'estimate_exposure X_contact <=0');
+            assertThrows(() => estimate_exposure(0.3, SAMPLE_X_CONTACT, 2.5, SAMPLE_B, 0), 'estimate_exposure r_s <=0');
+            assertThrows(() => estimate_exposure(-0.1, SAMPLE_X_CONTACT, 2.5, SAMPLE_B, SAMPLE_RS), 'estimate_exposure delta <0');
+
+            // Test CubeSource
+            resultsDiv.innerHTML += '<h3>Testing CubeSource:</h3>';
+            const cube = new CubeSource(0.1, SAMPLE_X_CONTACT);
+            assertEqual(cube.estimate_n(), CUBE_NOMINAL_N, 'CubeSource nominal n');
+
+            const cube_with_x30 = new CubeSource(0.1, SAMPLE_X_CONTACT);
+            const n_with_x30 = cube_with_x30.estimate_n(SAMPLE_X_30, SAMPLE_B);
+            assertEqual(n_with_x30, expected_n, 'CubeSource n with X_30', 0.001);
+
+            assertEqual(cube.exposure_at(0), SAMPLE_X_CONTACT, 'CubeSource exposure at 0');
+            const exp_03_cube = cube.exposure_at(0.3);
+            const expected_exp_03_cube = SAMPLE_X_CONTACT * Math.pow(0.05 / 0.35, CUBE_NOMINAL_N) * SAMPLE_B;
+            assertEqual(exp_03_cube, expected_exp_03_cube, 'CubeSource exposure at 0.3', 0.01);
+
+            assertThrows(() => new CubeSource(0, SAMPLE_X_CONTACT), 'CubeSource invalid side');
+            assertThrows(() => new CubeSource(0.1, 0), 'CubeSource invalid X_contact');
+
+            // Test CylinderSource
+            resultsDiv.innerHTML += '<h3>Testing CylinderSource:</h3>';
+            const cyl_side = new CylinderSource(0.1, 0.2, 'side', SAMPLE_X_CONTACT);
+            assertEqual(cyl_side.estimate_n(), CYLINDER_NOMINAL_N, 'CylinderSource side nominal n');
+
+            const cyl_top = new CylinderSource(0.1, 0.2, 'top', SAMPLE_X_CONTACT);
+            assertEqual(cyl_top.r_s, 0.1, 'CylinderSource top r_s');
+
+            const cyl_with_x30 = new CylinderSource(0.1, 0.2, 'side', SAMPLE_X_CONTACT);
+            const n_cyl_x30 = cyl_with_x30.estimate_n(SAMPLE_X_30, SAMPLE_B);
+            assertEqual(n_cyl_x30, expected_n, 'CylinderSource n with X_30', 0.001);
+
+            assertEqual(cyl_side.exposure_at(0), SAMPLE_X_CONTACT, 'CylinderSource exposure at 0');
+            const exp_03_cyl = cyl_side.exposure_at(0.3);
+            const expected_exp_03_cyl = SAMPLE_X_CONTACT * Math.pow(0.05 / 0.35, CYLINDER_NOMINAL_N) * SAMPLE_B;
+            assertEqual(exp_03_cyl, expected_exp_03_cyl, 'CylinderSource exposure at 0.3', 0.01);
+
+            assertThrows(() => new CylinderSource(0, 0.2, 'side', SAMPLE_X_CONTACT), 'CylinderSource invalid diameter');
+            assertThrows(() => new CylinderSource(0.1, 0, 'side', SAMPLE_X_CONTACT), 'CylinderSource invalid height');
+            assertThrows(() => new CylinderSource(0.1, 0.2, 'invalid', SAMPLE_X_CONTACT), 'CylinderSource invalid orientation');
+            assertThrows(() => new CylinderSource(0.1, 0.2, 'side', 0), 'CylinderSource invalid X_contact');
+
+            resultsDiv.innerHTML += '<h3>All tests passed!</h3>';
+        }
+    </script>
+</body>
+</html>

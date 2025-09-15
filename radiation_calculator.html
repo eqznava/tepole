@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Radiation Exposure Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Indie+Flower&display=swap" rel="stylesheet">
+  <style>
+    /* Ghibli-inspired styling */
+    body {
+      font-family: 'Noto Sans', sans-serif;
+      background: linear-gradient(to bottom, #A8E6CF 0%, #88D8A3 50%, #FFD3A5 100%);
+      color: #2C5530; margin: 0; padding: 20px; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; box-sizing: border-box;
+    }
+    .container { max-width: 600px; width: 100%; background: rgba(255,255,255,.8);
+      border-radius: 20px; padding: 30px; box-shadow: 0 8px 32px rgba(0,0,0,.1); backdrop-filter: blur(10px);}
+    h1 { font-family: 'Indie Flower', cursive; text-align: center; color: #4A7C59; margin-bottom: 10px; font-size: 2em; }
+    .totoro-icon { font-size: 3em; text-align: center; margin-bottom: 10px; animation: float 3s ease-in-out infinite; }
+    form { display: flex; flex-direction: column; gap: 15px; }
+    label { font-weight: bold; color: #2C5530; }
+    input, select { padding: 10px; border: 2px solid #88D8A3; border-radius: 10px; font-size: 16px; background: rgba(255,255,255,.9); }
+    button { background: linear-gradient(to right, #88D8A3, #A8E6CF); color: #2C5530; border: none; padding: 15px; border-radius: 15px;
+      font-size: 18px; font-weight: bold; cursor: pointer; transition: all .3s ease; }
+    button:hover { transform: scale(1.05) translateY(-2px); box-shadow: 0 6px 20px rgba(136,216,163,.4); }
+    #results { margin-top: 30px; display: none; }
+    table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,.9); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,.1); }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #88D8A3; }
+    th { background: #A8E6CF; font-weight: bold; }
+    .error { color: #FF6B6B; background: rgba(255,107,107,.1); padding: 10px; border-radius: 10px; margin-top: 10px; display: none; }
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .container { padding: 20px; border-radius: 15px; }
+      h1 { font-size: 1.5em; }
+      .totoro-icon { font-size: 2em; }
+      input, select, button { font-size: 18px; }
+      form { gap: 10px; }
+      table { font-size: 14px; }
+    }
+    @media (max-width: 480px) { th, td { padding: 8px; } }
+    @keyframes float { 0%,100%{transform: translateY(0)} 50%{transform: translateY(-10px)} }
+    @keyframes fadeIn { from {opacity:0; transform: translateY(10px)} to {opacity:1; transform: translateY(0)} }
+    .fade-in { animation: fadeIn .5s ease-out; }
+    input:focus, select:focus { border-color:#A8E6CF; box-shadow:0 0 10px rgba(168,230,207,.5); transition: all .3s ease; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="totoro-icon">🐻‍❄️</div>
+    <h1>Radiation Exposure Calculator</h1>
+    <p style="text-align:center; font-style:italic;">Inspired by the whimsical world of Studio Ghibli</p>
+
+    <form id="calcForm">
+      <label for="geometry">Select Geometry:</label>
+      <select id="geometry" name="geometry" onchange="toggleFields()">
+        <option value="cube">Cube</option>
+        <option value="cylinder">Cylinder</option>
+      </select>
+
+      <label for="sideOrDiameter">Side Length (Cube) or Diameter (Cylinder) (m):</label>
+      <input type="number" id="sideOrDiameter" name="sideOrDiameter" step="0.01" min="0.01" required>
+
+      <div id="heightField" style="display:none;">
+        <label for="height">Height (Cylinder) (m):</label>
+        <!-- sin required fijo; se aplicará dinámicamente -->
+        <input type="number" id="height" name="height" step="0.01" min="0.01" disabled>
+      </div>
+
+      <div id="orientationField" style="display:none;">
+        <label for="orientation">Orientation (Cylinder):</label>
+        <select id="orientation" name="orientation" disabled>
+          <option value="side">Side</option>
+          <option value="top">Top</option>
+        </select>
+      </div>
+
+      <label for="X_contact">Contact Reading (mR/h):</label>
+      <input type="number" id="X_contact" name="X_contact" step="0.01" min="0.01" required>
+
+      <label for="useX30">Provide 30 cm Reading? (for accurate n):</label>
+      <select id="useX30" name="useX30" onchange="toggleX30()">
+        <option value="no">No (use nominal n)</option>
+        <option value="yes">Yes</option>
+      </select>
+
+      <div id="X30Field" style="display:none;">
+        <label for="X_30">30 cm Reading (mR/h):</label>
+        <input type="number" id="X_30" name="X_30" step="0.01" min="0.01" disabled>
+      </div>
+
+      <label for="B">Buildup Factor B (default 1.05):</label>
+      <input type="number" id="B" name="B" step="0.01" min="0.01" value="1.05">
+
+      <button type="submit">Calculate Exposure Rates</button>
+    </form>
+
+    <div id="error" class="error"></div>
+
+    <div id="results">
+      <h2>Exposure Rates</h2>
+      <table>
+        <thead>
+          <tr><th>Distance (m)</th><th>Exposure (mR/h)</th></tr>
+        </thead>
+        <tbody id="resultsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Constants
+    const CUBE_NOMINAL_N = 2.5;
+    const CYLINDER_NOMINAL_N = 2.0;
+    const DEFAULT_B = 1.05;
+    const DISTANCES = [0.0, 0.3, 1.0, 2.0, 3.0];
+
+    // Core math
+    function calculate_n(X_30, X_contact, B, r_s) {
+      if (X_contact <= 0 || r_s <= 0) throw new Error('X_contact and r_s must be positive');
+      const exposure_ratio = X_30 / (X_contact * B);
+      if (exposure_ratio <= 0) throw new Error('Exposure ratio must be positive');
+      const distance_ratio = r_s / (r_s + 0.30);
+      return Math.log(exposure_ratio) / Math.log(distance_ratio);
+    }
+
+    function estimate_exposure(delta, X_contact, n, B, r_s) {
+      if (X_contact <= 0 || r_s <= 0) throw new Error('X_contact and r_s must be positive');
+      if (delta < 0) throw new Error('Delta must be non-negative');
+      if (delta === 0) return X_contact;
+      const factor = Math.pow(r_s / (r_s + delta), n);
+      return X_contact * factor * B;
+    }
+
+    class CubeSource {
+      constructor(side, X_contact) {
+        if (side <= 0 || X_contact <= 0) throw new Error('Side and X_contact must be positive');
+        this.side = side; this.X_contact = X_contact; this.r_s = side / 2;
+        this.n = null; this.B = DEFAULT_B;
+      }
+      estimate_n(X_30 = null, B = null) {
+        if (B !== null) this.B = B;
+        this.n = (X_30 !== null && X_30 > 0)
+          ? calculate_n(X_30, this.X_contact, this.B, this.r_s)
+          : CUBE_NOMINAL_N;
+        return this.n;
+      }
+      exposure_at(delta) { if (this.n === null) this.estimate_n(); return estimate_exposure(delta, this.X_contact, this.n, this.B, this.r_s); }
+    }
+
+    class CylinderSource {
+      constructor(diameter, height, orientation, X_contact) {
+        if (diameter <= 0 || height <= 0 || X_contact <= 0) throw new Error('Diameter, height, and X_contact must be positive');
+        if (!['side','top'].includes(orientation)) throw new Error('Orientation must be "side" or "top"');
+        this.diameter = diameter; this.height = height; this.orientation = orientation; this.X_contact = X_contact;
+        this.r_s = orientation === 'side' ? diameter / 2 : height / 2;
+        this.n = null; this.B = DEFAULT_B;
+      }
+      estimate_n(X_30 = null, B = null) {
+        if (B !== null) this.B = B;
+        this.n = (X_30 !== null && X_30 > 0)
+          ? calculate_n(X_30, this.X_contact, this.B, this.r_s)
+          : CYLINDER_NOMINAL_N;
+        return this.n;
+      }
+      exposure_at(delta) { if (this.n === null) this.estimate_n(); return estimate_exposure(delta, this.X_contact, this.n, this.B, this.r_s); }
+    }
+
+    // UI helpers (fix for "not focusable")
+    function toggleFields() {
+      const geometry = document.getElementById('geometry').value;
+      const heightField = document.getElementById('heightField');
+      const orientationField = document.getElementById('orientationField');
+      const heightInput = document.getElementById('height');
+      const orientationSelect = document.getElementById('orientation');
+
+      if (geometry === 'cylinder') {
+        heightField.style.display = 'block';
+        orientationField.style.display = 'block';
+        heightInput.disabled = false;
+        heightInput.required = true;
+        orientationSelect.disabled = false;
+      } else {
+        heightField.style.display = 'none';
+        orientationField.style.display = 'none';
+        heightInput.required = false;
+        heightInput.disabled = true;
+        heightInput.value = '';
+        orientationSelect.disabled = true;
+      }
+    }
+
+    function toggleX30() {
+      const useX30 = document.getElementById('useX30').value;
+      const X30Field = document.getElementById('X30Field');
+      const X30Input = document.getElementById('X_30');
+
+      if (useX30 === 'yes') {
+        X30Field.style.display = 'block';
+        X30Input.disabled = false;
+        X30Input.required = true;
+      } else {
+        X30Field.style.display = 'none';
+        X30Input.required = false;
+        X30Input.disabled = true;
+        X30Input.value = '';
+      }
+    }
+
+    document.getElementById('calcForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const errorDiv = document.getElementById('error');
+      const resultsDiv = document.getElementById('results');
+      const resultsTable = document.getElementById('resultsTable');
+      errorDiv.style.display = 'none'; resultsDiv.style.display = 'none'; resultsTable.innerHTML = '';
+
+      try {
+        const geometry = document.getElementById('geometry').value;
+        const sideOrDiameter = parseFloat(document.getElementById('sideOrDiameter').value);
+        const X_contact = parseFloat(document.getElementById('X_contact').value);
+        const B = parseFloat(document.getElementById('B').value);
+        const useX30 = document.getElementById('useX30').value;
+        let X_30 = null;
+        if (useX30 === 'yes') X_30 = parseFloat(document.getElementById('X_30').value);
+
+        let source;
+        if (geometry === 'cube') {
+          source = new CubeSource(sideOrDiameter, X_contact);
+        } else {
+          const height = parseFloat(document.getElementById('height').value);
+          const orientation = document.getElementById('orientation').value;
+          source = new CylinderSource(sideOrDiameter, height, orientation, X_contact);
+        }
+
+        source.B = B;
+        source.estimate_n(X_30, B);
+
+        resultsDiv.style.display = 'block';
+        DISTANCES.forEach(delta => {
+          const exposure = source.exposure_at(delta);
+          const row = `<tr class="fade-in"><td>${delta.toFixed(1)}</td><td>${exposure.toFixed(2)}</td></tr>`;
+          resultsTable.insertAdjacentHTML('beforeend', row);
+        });
+      } catch (err) {
+        const errorDiv = document.getElementById('error');
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = 'block';
+      }
+    });
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      toggleFields();
+      toggleX30();
+    });
+  </script>
+</body>
+</html>
